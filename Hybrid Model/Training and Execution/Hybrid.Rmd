@@ -1,0 +1,363 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+```{r}
+library(FNN)
+library(data.table)
+library(cluster)
+```
+
+```{r}
+# Step 1: Load the Dataset
+file_path <- "/Users/lakshmirohithreddyannapureddy/Downloads/merged_data_movieLens (3).csv"
+merged_data <- fread(file_path)
+```
+
+```{r}
+# Step 2: Prepare Features for Clustering
+clustering_features <- merged_data[, .(
+  Action, Adventure, Animation, Children, Comedy, Crime,
+  Documentary, Drama, Fantasy, `Film-Noir`, Horror, IMAX,
+  Musical, Mystery, Romance, `Sci-Fi`, Thriller, War, Western,
+  rating
+)]
+```
+
+```{r}
+# Handle missing values
+clustering_features[is.na(clustering_features)] <- 0
+
+# Scale the features
+clustering_features_scaled <- scale(clustering_features)
+```
+
+```{r}
+# Step 3: Perform K-Means Clustering
+set.seed(42)
+k <- 10  # Number of clusters
+kmeans_result <- kmeans(clustering_features_scaled, centers = k, nstart = 10)
+
+# Add cluster assignments to the dataset
+merged_data[, Cluster := kmeans_result$cluster]
+
+# Save clustered data 
+fwrite(merged_data, "/Users/lakshmirohithreddyannapureddy/Downloads/clustered_data.csv")
+
+
+```
+
+
+```{r}
+# Step 4: Nearest Neighbors Within Clusters
+
+recommend_from_cluster_nn <- function(input_movie_title, num_recommendations = 5) {
+  # Find the movie ID from the title
+  input_movie_id <- merged_data[title == input_movie_title, movieId]
+  
+  if (length(input_movie_id) == 0) {
+    stop("Movie title not found in the dataset.")
+  }
+  
+  # Get the cluster of the input movie
+  input_cluster <- merged_data[movieId == input_movie_id, Cluster]
+  
+  if (length(input_cluster) == 0) {
+    stop("Cluster not found for the input movie.")
+  }
+  
+  # Select movies from the same cluster
+  cluster_movies <- merged_data[Cluster == input_cluster]
+  
+  # Prepare scaled features
+  cluster_features <- cluster_movies[, .(
+    Action, Adventure, Animation, Children, Comedy, Crime,
+    Documentary, Drama, Fantasy, `Film-Noir`, Horror, IMAX,
+    Musical, Mystery, Romance, `Sci-Fi`, Thriller, War, Western,
+    rating
+  )]
+  
+  # Find the input movie's index within the cluster
+  input_index <- which(cluster_movies$title == input_movie_title)
+  
+  # Compute nearest neighbors
+  neighbors <- get.knnx(as.matrix(cluster_features), as.matrix(cluster_features[input_index, , drop = FALSE]), k = num_recommendations + 1)
+  
+  # Exclude the input movie and get recommended indices
+  recommended_indices <- neighbors$nn.index[1, -1]
+  
+  # Return recommended movie titles
+  recommendations <- cluster_movies[recommended_indices, .(title)]
+  return(recommendations)
+}
+
+```
+
+```{r}
+# Input movie title
+input_movie_title <- "Toy Story (1995)" 
+
+# Get recommendations
+recommendations <- recommend_from_cluster_nn(input_movie_title)
+
+# Print recommendations
+print(recommendations)
+
+```
+
+```{r}
+
+# Save the clustered dataset
+saveRDS(merged_data, "/Users/lakshmirohithreddyannapureddy/Downloads/merged_data_with_clusters.rds")
+
+# Save the scaled features
+saveRDS(clustering_features_scaled, "/Users/lakshmirohithreddyannapureddy/Downloads/clustering_features_scaled.rds")
+
+# Save the K-Means model
+saveRDS(kmeans_result, "/Users/lakshmirohithreddyannapureddy/Downloads/kmeans_model.rds")
+
+```
+
+```{r}
+system.time({
+  recommendations <- recommend_from_cluster_nn("Toy Story (1995)", num_recommendations = 5)
+})
+
+```
+
+
+```{r}
+# Define the input movie titles
+input_movies <- c(
+  'Crimson Tide (1995)', 'Ace Ventura: When Nature Calls (1995)', 'Down Periscope (1996)', 
+  'Santa Clause, The (1994)', 'Interview with the Vampire: The Vampire Chronicles (1994)', 
+  'Billy Madison (1995)', 'When a Man Loves a Woman (1994)', 'Immortal Beloved (1994)', 
+  'Star Trek: Generations (1994)', 'Seven (a.k.a. Se7en) (1995)', 'Bitter Moon (1992)', 
+  'Pocahontas (1995)', 'Man of the House (1995)', 'Species (1995)', 'Little Women (1994)', 
+  "What's Eating Gilbert Grape (1993)", 'Before Sunrise (1995)', 'Clear and Present Danger (1994)', 
+  'Dangerous Minds (1995)', "Mary Shelley's Frankenstein (Frankenstein) (1994)", 'Stargate (1994)', 
+  'Fargo (1996)', 'Dolores Claiborne (1995)', 'Hoop Dreams (1994)', 'Pulp Fiction (1994)', 
+  'Batman (1989)', 'Waterworld (1995)', 'Ace Ventura: Pet Detective (1994)', 
+  'Shawshank Redemption, The (1994)', 'Dances with Wolves (1990)', 'Addams Family Values (1993)', 
+  'Casper (1995)', 'Milk Money (1994)', 'Murder in the First (1995)', 'Heavy Metal (1981)', 
+  'Boxing Helena (1993)', 'Junior (1994)', 'Dumb & Dumber (Dumb and Dumber) (1994)', 
+  'Batman Forever (1995)', 'Tommy Boy (1995)', 'Aladdin (1992)', 'Specialist, The (1994)', 
+  'Major Payne (1995)', 'Nell (1994)', 'Disclosure (1994)'
+)
+
+# Create a function to process all movies
+recommend_for_all_unique <- function(movie_titles) {
+  recommendations_list <- list()
+  
+  for (movie_title in movie_titles) {
+    tryCatch({
+      # Get a single recommendation
+      recommendations <- recommend_from_cluster_nn(movie_title, num_recommendations = 2)
+      # Filter out the input movie from recommendations
+      filtered_recommendations <- recommendations[title != movie_title, title]
+      if (length(filtered_recommendations) > 0) {
+        recommendations_list[[movie_title]] <- filtered_recommendations[1] # Take the first unique recommendation
+      } else {
+        recommendations_list[[movie_title]] <- "No unique recommendations available"
+      }
+    }, error = function(e) {
+      # Handle errors (e.g., movie not found) gracefully
+      recommendations_list[[movie_title]] <- paste("Error:", e$message)
+    })
+  }
+  
+  return(recommendations_list)
+}
+
+# Get recommendations for all input movies
+results <- recommend_for_all_unique(input_movies)
+
+```
+
+
+```{r}
+# Print the recommendations for each movie
+for (movie in names(results)) {
+  cat("Input Movie:", movie, "\n")
+  cat("Recommendation:", results[[movie]], "\n\n")
+}
+
+```
+```{r}
+# Convert the results list to a data frame
+results_df <- data.frame(
+  Input_Movie = names(results),
+  Recommendation = unlist(results, use.names = FALSE)
+)
+
+# Define the file path for the CSV
+file_path <- "/Users/lakshmirohithreddyannapureddy/movie_recommendations.csv"
+
+# Write the data frame to a CSV file
+write.csv(results_df, file_path, row.names = FALSE)
+
+# Output the file path
+cat("File saved to:", file_path, "\n")
+
+
+```
+```{r}
+
+```
+
+
+```{r}
+# Load the CSV file
+file_path <- "/Users/lakshmirohithreddyannapureddy/Downloads/x_data.csv"
+test_data <- read.csv(file_path)
+
+# View the first few rows
+head(test_data)
+
+
+```
+
+```{r}
+# Load the input CSV file
+file_path <- "/Users/lakshmirohithreddyannapureddy/Downloads/x_data.csv"
+test_data <- read.csv(file_path, stringsAsFactors = FALSE)
+
+# Function to clean and parse the strings into actual R lists
+parse_movie_list <- function(movie_string) {
+  # Remove the square brackets and split by commas
+  movie_string <- gsub("\\[|\\]", "", movie_string) # Remove square brackets
+  movie_string <- gsub("'", "", movie_string)      # Remove single quotes
+  movie_list <- unlist(strsplit(movie_string, ", ")) # Split by comma and space
+  return(movie_list)
+}
+
+# Apply the parsing function to the x column
+test_data$x <- lapply(test_data$x, parse_movie_list)
+
+# View the parsed data
+head(test_data)
+
+
+```
+
+```{r}
+
+
+# Load the input CSV
+file_path <- "/Users/lakshmirohithreddyannapureddy/Downloads/x_data.csv"
+test_data <- read.csv(file_path, stringsAsFactors = FALSE)
+
+# Function to clean and parse the x column into lists
+parse_movie_list <- function(movie_string) {
+  # Remove square brackets and single quotes
+  movie_string <- gsub("\\[|\\]", "", movie_string)  # Remove square brackets
+  movie_string <- gsub("'", "", movie_string)       # Remove single quotes
+  movie_list <- unlist(strsplit(movie_string, ", ")) # Split by comma and space
+  return(movie_list)
+}
+
+# Apply the parsing function to the x column
+test_data$x <- lapply(test_data$x, parse_movie_list)
+
+# Check the cleaned data
+head(test_data)
+
+
+```
+
+```{r}
+library(FNN)
+library(data.table)
+
+# Step 1: Load Preprocessed Data
+merged_data <- readRDS("/Users/lakshmirohithreddyannapureddy/Downloads/merged_data_with_clusters.rds")
+
+# Step 2: Load the Test Input Dataset
+test_input <- fread(
+  "/Users/lakshmirohithreddyannapureddy/Downloads/x_data.csv",
+  fill = TRUE, 
+  quote = "",
+  sep = ",",
+  header = TRUE,
+  stringsAsFactors = FALSE
+)
+
+# Extract the first column as movie titles (if no clear `title` column exists)
+if (!"title" %in% colnames(test_input)) {
+  test_input$title <- test_input[[1]]  # Assume the first column contains movie titles
+}
+
+# Step 3: Define the Hybrid Recommendation Function
+recommend_from_cluster_nn <- function(input_movie_title, num_recommendations = 1) {
+  # Find the movie ID from the title
+  input_movie_id <- merged_data[title == input_movie_title, movieId]
+  
+  if (length(input_movie_id) == 0) {
+    return(data.table(input_title = input_movie_title, recommended_title = NA))
+  }
+  
+  # Get the cluster of the input movie
+  input_cluster <- merged_data[movieId == input_movie_id, Cluster]
+  
+  if (length(input_cluster) == 0) {
+    return(data.table(input_title = input_movie_title, recommended_title = NA))
+  }
+  
+  # Select movies from the same cluster
+  cluster_movies <- merged_data[Cluster == input_cluster]
+  
+  # Prepare features for Nearest Neighbors
+  cluster_features <- cluster_movies[, .(
+    Action, Adventure, Animation, Children, Comedy, Crime,
+    Documentary, Drama, Fantasy, `Film-Noir`, Horror, IMAX,
+    Musical, Mystery, Romance, `Sci-Fi`, Thriller, War, Western,
+    rating
+  )]
+  
+  # Find the input movie's index within the cluster
+  input_index <- which(cluster_movies$title == input_movie_title)
+  
+  if (length(input_index) == 0) {
+    return(data.table(input_title = input_movie_title, recommended_title = NA))
+  }
+  
+  # Compute nearest neighbors
+  neighbors <- get.knnx(as.matrix(cluster_features), as.matrix(cluster_features[input_index, , drop = FALSE]), k = num_recommendations + 1)
+  
+  # Exclude the input movie and get recommended indices
+  recommended_indices <- neighbors$nn.index[1, -1]
+  
+  # Return the recommended movie titles
+  recommendations <- cluster_movies[recommended_indices, .(title)]
+  if (length(recommendations$title) == 0) {
+    return(data.table(input_title = input_movie_title, recommended_title = NA))
+  }
+  
+  return(data.table(input_title = input_movie_title, recommended_title = recommendations$title[1]))
+}
+
+# Step 4: Generate Recommendations for Each Movie in Test Input
+output <- data.table()
+for (movie_title in test_input$title) {
+  recommendation <- recommend_from_cluster_nn(movie_title)
+  output <- rbind(output, recommendation, fill = TRUE)
+}
+
+# Step 5: Save the Output to CSV
+output_file <- "/Users/lakshmirohithreddyannapureddy/Downloads/recommendations_output.csv"
+fwrite(output, output_file)
+
+cat("Recommendations saved to:", output_file)
+
+
+
+
+
+
+```
+
+
+
+```
+
