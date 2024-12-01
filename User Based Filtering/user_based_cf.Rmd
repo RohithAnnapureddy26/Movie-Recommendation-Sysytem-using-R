@@ -1,0 +1,223 @@
+---
+title: "User Based Collaboorative Filtering"
+output: html_notebook
+---
+
+## User based Collaborative Filtering
+
+### Load ratings data, drop the "timestamp" column, and preview the data.
+
+```{r}
+
+# Define file path
+ratings_path <- "/Users/vasista/Downloads/rating.csv"
+
+# Load ratings data
+ratings <- fread(ratings_path)
+
+# Drop the timestamp column
+ratings <- ratings[, !"timestamp", with=FALSE]
+
+# Preview the ratings data
+head(ratings)
+
+```
+
+### Load movies data and preview it
+
+```{r}
+# Define file path
+movies_path <- "/Users/vasista/Downloads/movie.csv"
+
+# Load movies data
+movies <- fread(movies_path, quote="", fill=Inf)
+
+# Preview the movie data
+head(movies)
+
+```
+
+### Check the structure of the datasets.
+
+```{r}
+str(ratings)
+str(movies)
+```
+
+
+```{r}
+setnames(movies, gsub('\"', '', colnames(movies)))
+```
+
+### Merge datasets by 'movieId' and preview the merged data
+
+```{r}
+# Directly merge movies and ratings by 'movieId'
+merged_data <- merge(ratings, movies, by = "movieId")
+
+# View the merged data
+head(merged_data)
+```
+
+### Calculate average ratings and rating counts for movies, and display the top-rated movies.
+
+```{r}
+# Calculate average ratings and rating counts for each movie
+movie_avg_ratings <- merged_data %>%
+  group_by(movieId, title) %>%
+  summarise(
+    avg_rating = mean(rating),
+    rating_count = n(),
+    .groups = 'drop'
+  ) %>%
+  arrange(desc(avg_rating))
+
+# View the top 10 highest-rated movies
+head(movie_avg_ratings, 10)
+
+```
+
+### Transform genres into binary columns, merge with average ratings, and preview the feature matrix.
+
+```{r}
+# Transform genres into binary columns
+movie_features <- movies %>%
+  separate_rows(genres, sep = "\\|") %>%
+  mutate(value = 1) %>%
+  pivot_wider(names_from = genres, values_from = value, values_fill = 0)
+
+# Merge with average ratings
+movie_features <- merge(movie_features, movie_avg_ratings, by = "movieId")
+
+# View the feature matrix
+head(movie_features)
+
+```
+
+### Create a binary genre feature matrix, prepare a numeric feature matrix, fit a Nearest Neighbors model, define a recommendation function, and test it.
+
+
+```{r}
+library(RANN)
+
+# Transform movies to create a binary genre feature matrix
+movie_features <- movies %>%
+    separate_rows(genres, sep = "\\|") %>%
+    mutate(value = 1) %>%
+    pivot_wider(
+        id_cols = c(movieId, title),  # Retain movieId and title
+        names_from = genres,
+        values_from = value,
+        values_fill = 0
+    )
+
+# Verify column names
+colnames(movie_features)
+
+# Prepare the feature matrix (only numeric columns)
+feature_matrix <- movie_features %>%
+    select(where(is.numeric)) %>%
+    as.matrix()
+
+# Fit the Nearest Neighbors model
+nn_model <- nn2(data = feature_matrix, k = 6)  # Find 5 nearest neighbors for each movie
+
+# Function to get recommendations based on a movie ID
+get_recommendations <- function(movie_id) {
+    # Get the row index for the input movie
+    row_index <- which(movie_features$movieId == movie_id)
+    
+    # Handle missing movie ID
+    if (length(row_index) == 0) {
+        stop("Movie ID not found in the dataset.")
+    }
+    
+    # Find the nearest neighbors
+    neighbors <- nn_model$nn.idx[row_index, -1]  # Exclude the input movie itself
+    
+    # Return recommended movie IDs and titles
+    return(movie_features %>%
+        filter(movieId %in% movie_features$movieId[neighbors]) %>%
+        select(movieId, title))
+}
+
+# Test the recommendation function
+recommendations <- get_recommendations(1)  # Replace '1' with a specific movie ID
+print(recommendations)
+```
+
+
+```{r}
+colnames(movie_features)
+
+```
+
+### Create a histogram to visualize the distribution of average movie ratings.
+
+```{r}
+# Visualize top-rated movies
+library(ggplot2)
+
+ggplot(movie_avg_ratings, aes(x = avg_rating)) +
+  geom_histogram(binwidth = 0.5, fill = "blue", color = "black") +
+  labs(title = "Distribution of Average Movie Ratings", x = "Average Rating", y = "Count")
+
+```
+
+### Extract numeric columns from the movie_features dataset as a matrix.
+
+```{r}
+# Use only numeric columns from the movie_features dataset
+X <- movie_features %>%
+    select(where(is.numeric)) %>%
+    as.matrix()
+
+```
+
+
+### Perform k-means clustering for different k values, calculate WCSS, and plot the elbow method.
+
+```{r}
+library(ggplot2)
+
+# Define the dataset for clustering
+X <- movie_features %>%
+    select(where(is.numeric)) %>%
+    as.matrix()
+
+# Initialize an empty vector for within-cluster sum of squares (WCSS)
+wcss <- c()
+k_values <- 1:30  # Range of k values to test
+
+# Perform k-means clustering for each k value
+for (k in k_values) {
+    kmeans_model <- kmeans(X, centers = k, nstart = 10)
+    wcss <- c(wcss, kmeans_model$tot.withinss)
+}
+
+# Create a data frame for plotting
+elbow_plot <- data.frame(k_values = k_values, wcss = wcss)
+
+# Plot the elbow method
+ggplot(elbow_plot, aes(x = k_values, y = wcss)) +
+    geom_line() +
+    geom_point() +
+    labs(title = "The Elbow Method",
+         x = "Number of Clusters (k)",
+         y = "Within-Cluster Sum of Squares (WCSS)") +
+    theme_minimal()
+
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
