@@ -37,5 +37,5 @@ https://drive.google.com/file/d/1t1SGPx1AcvTdz9g9Hab2q_iM6seGojb7/view?usp=shari
 ### 📁 Item Based CF /
 - **Untitled.Rmd**: Working code using Cosine similarity as an item based filtering using the merged dataset.
 
-### 📁 User Based Filtering/
+### 📁 User Based Filtering /
 - **user_based_cf.Rmd**: Code on using KMeans clustering on user specific data after merging on **movies.csv** and **rating.csv**.
