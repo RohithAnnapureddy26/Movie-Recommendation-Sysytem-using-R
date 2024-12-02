@@ -11,7 +11,7 @@ The MovieLens 20M dataset offered a useful and varied dataset for developing and
 **Dataset**: https://www.kaggle.com/datasets/grouplens/movielens-20m-dataset
 
 ## Methodology:
-https://drive.google.com/file/d/1t1SGPx1AcvTdz9g9Hab2q_iM6seGojb7/view?usp=sharing
+<img width="1250" alt="image" src="https://github.com/user-attachments/assets/8c0585af-37a1-4fbc-a46f-a6af9052081e">
 
 ## Tech stack used:
 - R
