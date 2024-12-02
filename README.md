@@ -19,18 +19,18 @@ https://drive.google.com/file/d/1t1SGPx1AcvTdz9g9Hab2q_iM6seGojb7/view?usp=shari
 
 ## Repository Structure:
 ### Content Based Filtering:
-**Content_based_filtering.Rmd**: The working code for content based filtering using nearest neighbors approach on the merged dataset.
+- **Content_based_filtering.Rmd**: The working code for content based filtering using nearest neighbors approach on the merged dataset.
 
 ### Data Preprocessing:
-**data preprocessing_DM.Rmd**: Data Preprocessing steps and merging of movies.csv and rating.csv for content based filtering.
+- **data preprocessing_DM.Rmd**: Data Preprocessing steps and merging of movies.csv and rating.csv for content based filtering.
 
 ### Hybrid Model-
-End Deployment
-1. clustered_data.csv- Data after applying KMeans.
-2. deployment_test.Rmd- Deployment script to run the shiny app.
-3. kmeans_model.rds, merged_data_with_clusters.rds and clustering_features_scaled.rds are their erspective weights.
+**End Deployment**
+- clustered_data.csv- Data after applying KMeans.
+- deployment_test.Rmd- Deployment script to run the shiny app.
+- kmeans_model.rds, merged_data_with_clusters.rds and clustering_features_scaled.rds are their erspective weights.
 Training and Execution
-1. Hybrid.Rmd- Working for performing data preprocessing, KMeans and Nearest neighbors approach on the merged dataset.
+- Hybrid.Rmd- Working for performing data preprocessing, KMeans and Nearest neighbors approach on the merged dataset.
 
 
 Item Based CF
